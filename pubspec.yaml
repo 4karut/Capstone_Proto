@@ -1,22 +1,31 @@
-name: capstone_proto
-description: 공동체와 동네 가게를 연결하는 한턱 Flutter 프로토타입
+name: capstone_proto_02
+description: 한턱 회원가입 화면 검토용 Flutter 프로토타입
 publish_to: none
-version: 1.0.0+1
+version: 0.1.0+1
+
 environment:
   sdk: ^3.13.0
+
 dependencies:
   flutter:
     sdk: flutter
-  shared_preferences: ^2.5.6
-  qr_flutter: ^4.1.0
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  characters: ^1.4.1
+  qr_flutter: 4.1.0
+  file_picker: 13.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
 flutter:
   uses-material-design: true
   assets:
     - assets/fonts/OFL.txt
+    - assets/images/
   fonts:
     - family: NotoSansKR
       fonts:
