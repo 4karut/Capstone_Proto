@@ -88,7 +88,9 @@ flutter test
 flutter test test/live_server_v2_test.dart --dart-define=LIVE_API_V2=true
 flutter build web --release --no-web-resources-cdn
 # server 폴더
-./mvnw.cmd verify
+.\gradlew.bat clean build
 ```
 
 기존 화면 테스트 103개, 새 서버 모드 위젯 테스트, 실제 서버를 사용한 전체 흐름 테스트를 실행했습니다. 서버 테스트는 기존 15개와 새 v2 11개로 구성합니다. 동시 승인, 권한 위조, 코드 만료, 초대 인증, 결제 재시도, 사용 복구, 감사 사진 공개 범위와 이모지 글자 수를 확인합니다.
+
+서버는 Gradle 8.14.3 Wrapper를 사용합니다. 서버 루트에서 `.\gradlew.bat clean build`, `.\gradlew.bat bootRun`으로 빌드·실행하며 JAR은 `build/libs/`에 생성됩니다. 서버 구조 설명은 서버 README를 참고하세요.

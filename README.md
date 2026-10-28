@@ -4,7 +4,7 @@
 
 원격 `8c56fe0`의 화면과 흐름을 기준으로 Spring Boot API를 다시 연결했습니다. 실제 진입점은 `ServerGateway`를 사용하며 기본 주소는 `http://127.0.0.1:8081/api/v2`입니다. 아래 체험 계정은 서버의 local 프로필에서만 생성됩니다. 새로고침 후에도 계정·가입·후원·즐겨찾기·가게 신청·사용 및 취소·감사 메시지/사진이 DB에 남습니다. 기존 메모리 기반 `Demo*Store`는 화면 테스트를 위해 별도로 유지합니다.
 
-서버 실행은 `server/`에서 `./mvnw.cmd spring-boot:run`, 프론트 실행은 루트에서 `flutter pub get` 후 `flutter run -d chrome --web-port 8080`입니다. 다른 주소는 `--dart-define=API_BASE_URL=http://호스트:포트/api/v2`로 지정하세요. 서버 소스를 별도 저장소로 관리하는 경우 [백엔드 저장소](https://github.com/SeongjeLee22200525/Hantuk-backend)를 사용합니다.
+서버 실행은 `server/`에서 `.\gradlew.bat bootRun`, 프론트 실행은 루트에서 `flutter pub get` 후 `flutter run -d chrome --web-port 8080`입니다. 다른 주소는 `--dart-define=API_BASE_URL=http://호스트:포트/api/v2`로 지정하세요. 서버 소스를 별도 저장소로 관리하는 경우 [백엔드 저장소](https://github.com/SeongjeLee22200525/Hantuk-backend)를 사용합니다.
 
 실제 PG 결제·메일 발송·은행 송금·푸시는 연결하지 않은 모의 처리입니다. 서버/DB 구성·API·권한·검증은 [최신 서버 연동 문서](docs/server-v2.md)를 참고하세요. 아래 화면 설명의 메모리 초기화 안내는 원래 UI 검토용 로컬 모드에 해당합니다.
 
