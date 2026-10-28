@@ -1,3 +1,4 @@
+import 'server_gateway.dart';
 import 'group_store.dart';
 import 'donation_store.dart';
 import 'store_catalog.dart';
@@ -30,15 +31,30 @@ class _DemoCredential {
 class DemoAuthStore {
   DemoAuthStore({
     bool seedDemoAccount = true,
+    this.gateway,
     DemoGroupStore? groupStore,
     Future<UsagePhoto?> Function()? thanksPhotoPicker,
-  }) : groups = groupStore ?? DemoGroupStore() {
+  }) : groups =
+           groupStore ??
+           DemoGroupStore(
+             now: gateway == null ? null : () => gateway.currentTime,
+           ) {
     stores = DemoStoreCatalog(
       canApprove: isAdmin,
       now: () => groups.currentTime,
     );
     donations = DemoDonationStore(groups: groups, stores: stores);
     usage = DemoPrepaidUsageStore(groups: groups, stores: stores);
+    groups.gateway = gateway;
+    stores.gateway = gateway;
+    donations.gateway = gateway;
+    usage.gateway = gateway;
+    gateway?.applySnapshot = (s) {
+      groups.importSnapshot(s);
+      stores.importSnapshot(s);
+      donations.importSnapshot(s);
+      usage.importSnapshot(s);
+    };
     pickThanksPhoto = thanksPhotoPicker ?? photos.pickThanksPhoto;
     if (seedDemoAccount) {
       register(
@@ -79,6 +95,82 @@ class DemoAuthStore {
     }
   }
 
+  final ServerGateway? gateway;
+  final Map<String, bool> _availability = {};
+  String? _emailChallenge, _emailProof;
+  DemoAccount? get serverAccount =>
+      gateway?.account == null ? null : _account(gateway!.account!);
+  static DemoAccount _account(Map<String, dynamic> a) => DemoAccount(
+    id: a['id'],
+    name: a['name'],
+    birthDate: DateTime.parse(a['birthDate']),
+    email: a['email'],
+    phoneNumber: a['phoneNumber'],
+  );
+  Future<void> initializeRemote() async {
+    await gateway?.initialize();
+  }
+
+  Future<DemoAccount?> signInRemote(String id, String password) async {
+    if (gateway == null) return signIn(id, password);
+    final account = await gateway!.login(id, password);
+    return account == null ? null : _account(account);
+  }
+
+  Future<bool> checkIdRemote(String id) async {
+    final result = gateway == null
+        ? isIdAvailable(id)
+        : await gateway!.available(id);
+    _availability[_key(id)] = result;
+    return result;
+  }
+
+  Future<void> sendEmailRemote(String email) async {
+    _emailProof = null;
+    if (gateway != null) _emailChallenge = await gateway!.emailChallenge(email);
+  }
+
+  Future<bool> verifyEmailRemote(String code) async {
+    if (gateway == null) return code == '123456';
+    _emailProof = await gateway!.verifyEmail(_emailChallenge!, code);
+    return true;
+  }
+
+  Future<DemoAccount> registerRemote({
+    required String id,
+    required String password,
+    required String name,
+    required DateTime birthDate,
+    required String email,
+    required String phoneNumber,
+  }) async {
+    if (gateway == null) {
+      return register(
+        id: id,
+        password: password,
+        name: name,
+        birthDate: birthDate,
+        email: email,
+        phoneNumber: phoneNumber,
+      );
+    }
+    final a = await gateway!.register({
+      'id': id,
+      'password': password,
+      'name': name,
+      'birthDate':
+          '${birthDate.year.toString().padLeft(4, '0')}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}',
+      'email': email,
+      'phoneNumber': phoneNumber,
+      'verificationToken': _emailProof,
+    });
+    return _account(a);
+  }
+
+  Future<void> signOutRemote() async {
+    await gateway?.logout();
+  }
+
   static const sampleId = 'hantuck01';
   static const samplePassword = 'welcome123!';
   final Map<String, _DemoCredential> _accounts = {};
@@ -88,11 +180,15 @@ class DemoAuthStore {
   late final DemoPrepaidUsageStore usage;
   late final Future<UsagePhoto?> Function() pickThanksPhoto;
   final Set<String> _admins = {};
-  bool isAdmin(String userId) => _admins.contains(_key(userId));
+  bool isAdmin(String userId) => gateway == null
+      ? _admins.contains(_key(userId))
+      : gateway!.isAdmin && _key(userId) == _key(gateway!.account?["id"] ?? "");
 
   static String _key(String id) => id.trim().toLowerCase();
 
-  bool isIdAvailable(String id) => !_accounts.containsKey(_key(id));
+  bool isIdAvailable(String id) => gateway == null
+      ? !_accounts.containsKey(_key(id))
+      : (_availability[_key(id)] ?? true);
 
   DemoAccount register({
     required String id,

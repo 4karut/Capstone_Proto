@@ -1,3 +1,5 @@
+import 'server_gateway.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:characters/characters.dart';
 
@@ -113,6 +115,7 @@ class StoreApplication {
 
 /// Store information and account-scoped favorites for the local prototype.
 class DemoStoreCatalog extends ChangeNotifier {
+  ServerGateway? gateway;
   DemoStoreCatalog({
     bool Function(String)? canApprove,
     DateTime Function()? now,
@@ -470,4 +473,195 @@ class DemoStoreCatalog extends ChangeNotifier {
 
   List<DemoStore> favoritesFor(String userId) =>
       _stores.where((store) => isFavorite(store.id, userId)).toList();
+
+  static Map<String, dynamic> menuJson(StoreMenuItem m) => {
+    'name': m.name,
+    'description': m.description,
+    'price': m.price,
+    'recommended': m.recommended,
+  };
+  void importSnapshot(Map<String, dynamic> s) {
+    _stores.clear();
+    for (final a in s['stores']) {
+      _stores.add(
+        DemoStore(
+          id: a['id'],
+          name: a['name'],
+          address: a['address'],
+          description: a['description'],
+          tags: List<String>.from(a['tags']),
+          thumbnail: a['thumbnail'],
+          ownerId: a['ownerId'],
+          category: a['category'],
+          registrationNumber: a['registrationNumber'],
+          phoneNumber: a['phoneNumber'],
+          menu: (a['menu'] as List)
+              .map(
+                (m) => StoreMenuItem(
+                  name: m['name'],
+                  description: m['description'],
+                  price: m['price'],
+                  recommended: m['recommended'],
+                ),
+              )
+              .toList(),
+        ),
+      );
+    }
+    final old = {for (final a in _applications) a.id: a};
+    _applications.clear();
+    for (final a in s['storeApplications']) {
+      _applications.add(
+        (old[a['id']] ??
+              StoreApplication(
+                id: a['id'],
+                ownerId: a['ownerId'],
+                ownerName: a['ownerName'],
+                name: a['name'],
+                registrationNumber: a['registrationNumber'],
+                address: a['address'],
+                category: a['category'],
+                phoneNumber: a['phoneNumber'],
+                description: a['description'],
+                createdAt: DateTime.parse(a['createdAt']).toLocal(),
+                rootApplicationId: a['rootApplicationId'],
+                previousApplicationId: a['previousApplicationId'],
+                submissionNumber: a['submissionNumber'],
+              ))
+          .._storeId = a['storeId']
+          .._status = StoreApplicationStatus.values.byName(a['status'])
+          .._rejectionReason = a['rejectionReason']
+          .._reviewedAt = a['reviewedAt'] == null
+              ? null
+              : DateTime.parse(a['reviewedAt']).toLocal()
+          .._resubmissionId = a['resubmissionId'],
+      );
+    }
+    _favorites.clear();
+    if (s['account'] != null) {
+      _favorites[s['account']['id']] = Set<String>.from(s['storeFavorites']);
+    }
+    notifyListeners();
+  }
+
+  Future<StoreApplication> applyRemote({
+    required String ownerId,
+    required String ownerName,
+    required String name,
+    required String registrationNumber,
+    required String address,
+    required String category,
+    required String phoneNumber,
+    String description = '',
+    String? resubmissionOf,
+  }) async {
+    if (gateway == null) {
+      return apply(
+        ownerId: ownerId,
+        ownerName: ownerName,
+        name: name,
+        registrationNumber: registrationNumber,
+        address: address,
+        category: category,
+        phoneNumber: phoneNumber,
+        description: description,
+        resubmissionOf: resubmissionOf,
+      );
+    }
+    final r = await gateway!.command('store.apply', {
+      'name': name,
+      'registrationNumber': registrationNumber,
+      'address': address,
+      'category': category,
+      'phoneNumber': phoneNumber,
+      'description': description,
+      'resubmissionOf': resubmissionOf,
+    });
+    return _applications.firstWhere((a) => a.id == r['id']);
+  }
+
+  Future<DemoStore> approveRemote({
+    required String applicationId,
+    required String adminId,
+  }) async {
+    if (gateway == null) {
+      return approve(applicationId: applicationId, adminId: adminId);
+    }
+    final r = await gateway!.command('store.approve', {
+      'applicationId': applicationId,
+    });
+    return store(r['id']);
+  }
+
+  Future<void> rejectRemote({
+    required String applicationId,
+    required String adminId,
+    required String reason,
+  }) async {
+    if (gateway == null) {
+      reject(applicationId: applicationId, adminId: adminId, reason: reason);
+      return;
+    }
+    await gateway!.command('store.reject', {
+      'applicationId': applicationId,
+      'reason': reason,
+    });
+  }
+
+  Future<void> updateThumbnailRemote({
+    required String storeId,
+    required String ownerId,
+    required String thumbnail,
+  }) async {
+    if (gateway == null) {
+      updateThumbnail(storeId: storeId, ownerId: ownerId, thumbnail: thumbnail);
+      return;
+    }
+    await gateway!.command('store.thumbnail', {
+      'storeId': storeId,
+      'thumbnail': thumbnail,
+    });
+  }
+
+  Future<void> saveMenuRemote({
+    required String storeId,
+    required String ownerId,
+    required StoreMenuItem item,
+    int? index,
+  }) async {
+    if (gateway == null) {
+      saveMenu(storeId: storeId, ownerId: ownerId, item: item, index: index);
+      return;
+    }
+    await gateway!.command('store.menu.save', {
+      'storeId': storeId,
+      'item': menuJson(item),
+      'index': index,
+      'expectedMenu': store(storeId).menu.map(menuJson).toList(),
+    });
+  }
+
+  Future<void> removeMenuRemote({
+    required String storeId,
+    required String ownerId,
+    required int index,
+  }) async {
+    if (gateway == null) {
+      removeMenu(storeId: storeId, ownerId: ownerId, index: index);
+      return;
+    }
+    await gateway!.command('store.menu.remove', {
+      'storeId': storeId,
+      'index': index,
+      'expectedMenu': store(storeId).menu.map(menuJson).toList(),
+    });
+  }
+
+  Future<bool> toggleFavoriteRemote(String storeId, String userId) async {
+    if (gateway == null) return toggleFavorite(storeId, userId);
+    return (await gateway!.command('store.favorite', {
+          'storeId': storeId,
+        }))['added'] ==
+        true;
+  }
 }

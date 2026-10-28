@@ -25,13 +25,14 @@ class StorePrepaidSection extends StatefulWidget {
 class _StorePrepaidSectionState extends State<StorePrepaidSection> {
   String? _selected;
 
-  void _use(PrepaidStoreOffer offer) {
+  Future<void> _use(PrepaidStoreOffer offer) async {
     try {
-      final request = widget.auth.usage.begin(
+      final request = await widget.auth.usage.beginRemote(
         offerId: offer.id,
         userId: widget.account.id,
         userName: widget.account.name,
       );
+      if (!mounted) return;
       Navigator.of(context).push<void>(
         MaterialPageRoute(
           builder: (_) => PrepaidQrScreen(
@@ -42,6 +43,7 @@ class _StorePrepaidSectionState extends State<StorePrepaidSection> {
         ),
       );
     } on StateError catch (error) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error.message)));
     }

@@ -1,3 +1,5 @@
+import 'server_gateway.dart';
+
 import 'package:flutter/foundation.dart';
 
 import 'group_store.dart';
@@ -63,6 +65,7 @@ class DemoDonation {
 
 /// Simulated payments and recipient-specific in-app notifications. No real charge.
 class DemoDonationStore extends ChangeNotifier {
+  ServerGateway? gateway;
   DemoDonationStore({required this.groups, required this.stores});
   final DemoGroupStore groups;
   final DemoStoreCatalog stores;
@@ -70,7 +73,9 @@ class DemoDonationStore extends ChangeNotifier {
   int _checkoutSequence = 0;
 
   static String _key(String id) => id.trim().toLowerCase();
-  String beginCheckout() => 'checkout-${++_checkoutSequence}';
+  String beginCheckout() => gateway == null
+      ? 'checkout-${++_checkoutSequence}'
+      : ServerGateway.commandId();
 
   DemoDonation complete({
     required String checkoutId,
@@ -157,4 +162,62 @@ class DemoDonationStore extends ChangeNotifier {
       .toList()
       .reversed
       .toList();
+
+  void importSnapshot(Map<String, dynamic> s) {
+    _donations.clear();
+    for (final d in s['donations']) {
+      _donations.add(
+        DemoDonation(
+          id: d['id'],
+          checkoutId: d['checkoutId'],
+          type: DonationType.values.byName(d['type']),
+          groupId: d['groupId'],
+          donorId: d['donorId'],
+          donorName: d['donorName'],
+          amount: d['amount'],
+          createdAt: DateTime.parse(d['createdAt']).toLocal(),
+          storeId: d['storeId'],
+          expiresOn: d['expiresOn'] == null
+              ? null
+              : DateTime.parse(d['expiresOn']),
+        ),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<DemoDonation> completeRemote({
+    required String checkoutId,
+    required DonationType type,
+    required String groupId,
+    required String donorId,
+    required String donorName,
+    required int amount,
+    String? storeId,
+    DateTime? expiresOn,
+  }) async {
+    if (gateway == null) {
+      return complete(
+        checkoutId: checkoutId,
+        type: type,
+        groupId: groupId,
+        donorId: donorId,
+        donorName: donorName,
+        amount: amount,
+        storeId: storeId,
+        expiresOn: expiresOn,
+      );
+    }
+    final r = await gateway!.command('donation.complete', {
+      'checkoutId': checkoutId,
+      'type': type.name,
+      'groupId': groupId,
+      'amount': amount,
+      'storeId': storeId,
+      'expiresOn': expiresOn == null
+          ? null
+          : '${expiresOn.year.toString().padLeft(4, '0')}-${expiresOn.month.toString().padLeft(2, '0')}-${expiresOn.day.toString().padLeft(2, '0')}',
+    });
+    return _donations.firstWhere((d) => d.id == r['id']);
+  }
 }

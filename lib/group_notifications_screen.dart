@@ -1,3 +1,5 @@
+import 'server_widgets.dart';
+
 import 'package:flutter/material.dart';
 
 import 'demo_auth_store.dart';
@@ -121,11 +123,15 @@ class GroupNotificationsScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     FilledButton(
                       key: ValueKey('group-approve-${application.id}'),
-                      onPressed: () {
-                        auth.groups.approve(
-                          applicationId: application.id,
-                          ownerId: account.id,
+                      onPressed: () async {
+                        final ok = await remoteUiAction(
+                          context,
+                          () => auth.groups.approveRemote(
+                            applicationId: application.id,
+                            ownerId: account.id,
+                          ),
                         );
+                        if (!ok || !context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(

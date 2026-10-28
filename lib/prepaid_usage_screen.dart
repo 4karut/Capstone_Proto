@@ -1,3 +1,5 @@
+import 'server_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -30,17 +32,18 @@ class PrepaidQrScreen extends StatefulWidget {
 class _PrepaidQrScreenState extends State<PrepaidQrScreen> {
   bool _busy = false;
   String? _error;
-  void _approve() {
+  Future<void> _approve() async {
     if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final receipt = widget.auth.usage.approve(
+      final receipt = await widget.auth.usage.approveRemote(
         requestId: widget.requestId,
         userId: widget.account.id,
       );
+      if (!mounted) return;
       Navigator.of(context).pushReplacement<void, void>(
         MaterialPageRoute(
           builder: (_) => ThanksComposeScreen(
@@ -51,6 +54,7 @@ class _PrepaidQrScreenState extends State<PrepaidQrScreen> {
         ),
       );
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _error = error.message;
@@ -58,13 +62,14 @@ class _PrepaidQrScreenState extends State<PrepaidQrScreen> {
     }
   }
 
-  void _renew(PrepaidUsageRequest request) {
+  Future<void> _renew(PrepaidUsageRequest request) async {
     try {
-      final renewed = widget.auth.usage.begin(
+      final renewed = await widget.auth.usage.beginRemote(
         offerId: request.offerId,
         userId: widget.account.id,
         userName: widget.account.name,
       );
+      if (!mounted) return;
       Navigator.of(context).pushReplacement<void, void>(
         MaterialPageRoute(
           builder: (_) => PrepaidQrScreen(
@@ -75,6 +80,7 @@ class _PrepaidQrScreenState extends State<PrepaidQrScreen> {
         ),
       );
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() => _error = error.message);
     }
   }
@@ -263,9 +269,12 @@ class _PrepaidQrScreenState extends State<PrepaidQrScreen> {
                 key: const ValueKey('usage-cancel'),
                 onPressed: _busy
                     ? null
-                    : () => auth.usage.cancel(
-                        requestId: request.id,
-                        userId: widget.account.id,
+                    : () => remoteUiAction(
+                        context,
+                        () => auth.usage.cancelRemote(
+                          requestId: request.id,
+                          userId: widget.account.id,
+                        ),
                       ),
                 child: const Text('이용 요청 취소'),
               ),

@@ -1,3 +1,5 @@
+import 'server_widgets.dart';
+
 import 'package:flutter/material.dart';
 
 import 'demo_auth_store.dart';
@@ -41,8 +43,10 @@ class StoreDetailScreen extends StatelessWidget {
                 key: const ValueKey('store-favorite-toggle'),
                 tooltip: favorite ? '즐겨찾기 가게 해제' : '즐겨찾기 가게 지정',
                 isSelected: favorite,
-                onPressed: () =>
-                    auth.stores.toggleFavorite(store.id, account.id),
+                onPressed: () => remoteUiAction(
+                  context,
+                  () => auth.stores.toggleFavoriteRemote(store.id, account.id),
+                ),
                 icon: const Icon(
                   Icons.favorite_border_rounded,
                   color: HantuckColors.muted,

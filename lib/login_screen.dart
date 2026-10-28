@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_error != null) setState(() => _error = null);
   }
 
-  void _login() {
+  Future<void> _login() async {
     setState(() {
       _submitted = true;
       _error = null;
@@ -49,15 +49,23 @@ class _LoginScreenState extends State<LoginScreen> {
       (_id.text.trim().isEmpty ? _idFocus : _passwordFocus).requestFocus();
       return;
     }
-    final account = widget.auth.signIn(_id.text, _password.text);
-    if (account == null) {
+    DemoAccount? account;
+    try {
+      account = await widget.auth.signInRemote(_id.text, _password.text);
+    } on StateError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+      return;
+    }
+    if (!mounted) return;
+    final signedIn = account;
+    if (signedIn == null) {
       setState(() => _error = '아이디 또는 비밀번호를 확인해 주세요.');
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
     Navigator.of(context).pushReplacement<void, void>(
       MaterialPageRoute(
-        builder: (_) => MainScreen(auth: widget.auth, account: account),
+        builder: (_) => MainScreen(auth: widget.auth, account: signedIn),
       ),
     );
   }
@@ -267,7 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 16),
         const Text(
-          '가입한 데모 계정은 새로고침하거나 앱을 다시 시작하면 초기화돼요.',
+          '서버 연동 모드에서는 가입 정보와 이용 내역이 계정별로 저장됩니다.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 10,

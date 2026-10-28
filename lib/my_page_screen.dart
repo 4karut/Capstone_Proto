@@ -1,3 +1,5 @@
+import 'server_widgets.dart';
+
 import 'package:flutter/material.dart';
 
 import 'demo_auth_store.dart';
@@ -366,11 +368,14 @@ class AccountSettingsScreen extends StatelessWidget {
         const SizedBox(height: 25),
         OutlinedButton(
           key: const ValueKey('account-logout'),
-          onPressed: () => Navigator.of(context, rootNavigator: true)
-              .pushAndRemoveUntil<void>(
-                MaterialPageRoute(builder: (_) => LoginScreen(auth: auth)),
-                (_) => false,
-              ),
+          onPressed: () async {
+            await remoteUiAction(context, auth.signOutRemote);
+            if (!context.mounted) return;
+            Navigator.of(context, rootNavigator: true).pushAndRemoveUntil<void>(
+              MaterialPageRoute(builder: (_) => LoginScreen(auth: auth)),
+              (_) => false,
+            );
+          },
           child: const Text('로그아웃'),
         ),
       ],

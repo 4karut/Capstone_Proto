@@ -1,3 +1,5 @@
+import 'server_gateway.dart';
+
 import 'dart:math';
 
 import 'package:characters/characters.dart';
@@ -51,6 +53,9 @@ class GroupApplication {
 }
 
 class DemoGroupStore extends ChangeNotifier {
+  ServerGateway? gateway;
+  List<DemoGroup>? _serverGroups;
+  List<DemoGroup> get catalog => _serverGroups ?? allGroups;
   DemoGroupStore({
     Random? random,
     this.introductionRequired = false,
@@ -124,7 +129,7 @@ class DemoGroupStore extends ChangeNotifier {
   ];
   static String _userKey(String userId) => userId.trim().toLowerCase();
 
-  DemoGroup group(String id) => allGroups.firstWhere((g) => g.id == id);
+  DemoGroup group(String id) => catalog.firstWhere((g) => g.id == id);
 
   List<DemoGroup> search({String query = '', String category = '전체'}) {
     final tokens = query
@@ -134,7 +139,7 @@ class DemoGroupStore extends ChangeNotifier {
         .split(RegExp(r'\s+'))
         .where((part) => part.isNotEmpty)
         .toList();
-    final results = allGroups.where((g) {
+    final results = catalog.where((g) {
       if (category != '전체' && g.category != category) return false;
       final corpus = '${g.name} ${g.code} ${g.tags.join(' ')}'.toLowerCase();
       final compactCorpus = corpus.replaceAll(RegExp(r'\s+'), '');
@@ -149,20 +154,19 @@ class DemoGroupStore extends ChangeNotifier {
   bool isOwner(String groupId, String userId) =>
       _userKey(group(groupId).ownerId) == _userKey(userId);
 
-  bool ownsAnyGroup(String userId) =>
-      allGroups.any((g) => isOwner(g.id, userId));
+  bool ownsAnyGroup(String userId) => catalog.any((g) => isOwner(g.id, userId));
 
   bool isMember(String groupId, String userId) =>
       _members[groupId]?.contains(_userKey(userId)) ?? false;
 
   List<DemoGroup> memberships(String userId) =>
-      allGroups.where((g) => isMember(g.id, userId)).toList();
+      catalog.where((g) => isMember(g.id, userId)).toList();
 
   bool isFavorite(String groupId, String userId) =>
       _favorites[_userKey(userId)]?.contains(groupId) ?? false;
 
   List<DemoGroup> favoritesFor(String userId) =>
-      allGroups.where((group) => isFavorite(group.id, userId)).toList();
+      catalog.where((group) => isFavorite(group.id, userId)).toList();
 
   bool toggleFavorite(String groupId, String userId) {
     group(groupId);
@@ -343,5 +347,117 @@ class DemoGroupStore extends ChangeNotifier {
     }
     _members[groupId]!.add(_userKey(userId));
     notifyListeners();
+  }
+
+  void importSnapshot(Map<String, dynamic> s) {
+    _serverGroups = (s['groups'] as List)
+        .map(
+          (g) => DemoGroup(
+            id: g['id'],
+            code: g['code'],
+            name: g['name'],
+            category: g['category'],
+            tags: List<String>.from(g['tags']),
+            description: g['description'],
+            ownerId: g['ownerId'],
+            thumbnail: g['thumbnail'],
+            locked: g['locked'],
+          ),
+        )
+        .toList();
+    _members.clear();
+    (s['members'] as Map).forEach(
+      (k, v) => _members[k as String] = Set<String>.from(v),
+    );
+    final existing = {for (final a in _applications) a.id: a};
+    _applications.clear();
+    for (final a in s['groupApplications']) {
+      _applications.add(
+        (existing[a['id']] ??
+              GroupApplication(
+                id: a['id'],
+                groupId: a['groupId'],
+                userId: a['userId'],
+                userName: a['userName'],
+                introduction: a['introduction'],
+                createdAt: DateTime.parse(a['createdAt']).toLocal(),
+              ))
+          .._approved = a['approved'],
+      );
+    }
+    _favorites.clear();
+    if (s['account'] != null) {
+      _favorites[s['account']['id']] = Set<String>.from(s['groupFavorites']);
+    }
+    _prepaidOffers.clear();
+    for (final o in s['offers']) {
+      _prepaidOffers.add(
+        PrepaidStoreOffer(
+          id: o['id'],
+          groupId: o['groupId'],
+          storeId: o['storeId'],
+          storeName: o['storeName'],
+          totalAmount: o['totalAmount'],
+          usedAmount: o['usedAmount'],
+          startsOn: DateTime.parse(o['startsOn']),
+          expiresOn: DateTime.parse(o['expiresOn']),
+          donorId: o['donorId'],
+          donorName: o['donorName'],
+        ),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<GroupApplication> requestJoinRemote({
+    required String groupId,
+    required String userId,
+    required String userName,
+    required String introduction,
+  }) async {
+    if (gateway == null) {
+      return requestJoin(
+        groupId: groupId,
+        userId: userId,
+        userName: userName,
+        introduction: introduction,
+      );
+    }
+    final r = await gateway!.command('group.join', {
+      'groupId': groupId,
+      'introduction': introduction,
+    });
+    return _applications.firstWhere((a) => a.id == r['id']);
+  }
+
+  Future<void> joinWithInvitationRemote({
+    required String groupId,
+    required String userId,
+    required String code,
+  }) async {
+    if (gateway == null) {
+      joinWithInvitation(groupId: groupId, userId: userId, code: code);
+      return;
+    }
+    await gateway!.command('group.invite', {'groupId': groupId, 'code': code});
+  }
+
+  Future<void> approveRemote({
+    required String applicationId,
+    required String ownerId,
+  }) async {
+    if (gateway == null) {
+      approve(applicationId: applicationId, ownerId: ownerId);
+      return;
+    }
+    await gateway!.command('group.approve', {'applicationId': applicationId});
+  }
+
+  Future<bool> toggleFavoriteRemote(String groupId, String userId) async {
+    if (gateway == null) return toggleFavorite(groupId, userId);
+    return (await gateway!.command('group.favorite', {
+          'groupId': groupId,
+        }))['added'] ==
+        true;
   }
 }

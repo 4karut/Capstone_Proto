@@ -1,3 +1,5 @@
+import 'server_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -62,12 +64,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           ),
         );
         if (introduction == null || !mounted) return;
-        widget.auth.groups.requestJoin(
+        await widget.auth.groups.requestJoinRemote(
           groupId: widget.group.id,
           userId: widget.account.id,
           userName: widget.account.name,
           introduction: introduction,
         );
+        if (!mounted) return;
       }
       if (!mounted) return;
       await showDialog<void>(
@@ -158,9 +161,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   Icons.favorite_rounded,
                   color: Color(0xFFE54958),
                 ),
-                onPressed: () => widget.auth.groups.toggleFavorite(
-                  group.id,
-                  widget.account.id,
+                onPressed: () => remoteUiAction(
+                  context,
+                  () => widget.auth.groups.toggleFavoriteRemote(
+                    group.id,
+                    widget.account.id,
+                  ),
                 ),
               ),
             ),
@@ -497,15 +503,17 @@ class _InvitationDialogState extends State<_InvitationDialog> {
     super.dispose();
   }
 
-  void _join() {
+  Future<void> _join() async {
     try {
-      widget.auth.groups.joinWithInvitation(
+      await widget.auth.groups.joinWithInvitationRemote(
         groupId: widget.group.id,
         userId: widget.account.id,
         code: _code.text,
       );
+      if (!mounted) return;
       Navigator.of(context).pop(true);
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() => _error = error.message);
     }
   }

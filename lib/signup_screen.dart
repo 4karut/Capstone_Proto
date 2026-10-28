@@ -98,13 +98,20 @@ class _SignupScreenState extends State<SignupScreen> {
     return _codeError ?? '인증하기를 눌러 이메일 인증을 완료해 주세요.';
   }
 
-  void _checkId() {
-    final error = SignupValidation.id(_id.text);
+  Future<void> _checkId() async {
+    final value = _id.text;
+    var error = SignupValidation.id(value);
+    if (error == null) {
+      try {
+        if (!await widget.auth.checkIdRemote(value)) error = '이미 사용 중인 아이디예요.';
+      } on StateError catch (e) {
+        error = e.message;
+      }
+    }
+    if (!mounted || _id.text != value) return;
     setState(() {
-      _idError =
-          error ??
-          (widget.auth.isIdAvailable(_id.text) ? null : '이미 사용 중인 아이디예요.');
-      _checkedId = _idError == null ? _id.text : null;
+      _idError = error;
+      _checkedId = error == null ? value : null;
     });
   }
 
@@ -121,33 +128,50 @@ class _SignupScreenState extends State<SignupScreen> {
     _code.clear();
   });
 
-  void _sendCode() {
-    final error = SignupValidation.email(_email.text);
+  Future<void> _sendCode() async {
+    final email = _email.text;
+    var error = SignupValidation.email(email);
+    if (error == null) {
+      try {
+        await widget.auth.sendEmailRemote(email);
+      } on StateError catch (e) {
+        error = e.message;
+      }
+    }
+    if (!mounted || _email.text != email) return;
     setState(() {
       _emailError = error;
       if (error == null) {
-        _sentEmail = _email.text;
+        _sentEmail = email;
         _emailVerified = false;
         _codeError = null;
         _code.clear();
       }
     });
     if (error == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _codeFocus.requestFocus();
-      });
+      _codeFocus.requestFocus();
     } else {
       _emailFocus.requestFocus();
     }
   }
 
-  void _verifyCode() {
+  Future<void> _verifyCode() async {
     if (_sentEmail == null || _sentEmail != _email.text) return;
+    final email = _sentEmail;
+    bool verified = false;
+    String? error;
+    try {
+      verified = await widget.auth.verifyEmailRemote(_code.text);
+      if (!verified) error = '인증코드가 일치하지 않아요. 다시 확인해 주세요.';
+    } on StateError catch (e) {
+      error = e.message;
+    }
+    if (!mounted || email != _sentEmail) return;
     setState(() {
-      _emailVerified = _code.text == '123456';
-      _codeError = _emailVerified ? null : '인증코드가 일치하지 않아요. 다시 확인해 주세요.';
+      _emailVerified = verified;
+      _codeError = error;
     });
-    if (_emailVerified) _codeFocus.unfocus();
+    if (verified) _codeFocus.unfocus();
   }
 
   Future<void> _chooseBirthDate() async {
@@ -175,7 +199,7 @@ class _SignupScreenState extends State<SignupScreen> {
     _phoneFocus.requestFocus();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_completing) return;
     setState(() => _submitted = true);
     final valid = _form.currentState!.validate();
@@ -201,20 +225,30 @@ class _SignupScreenState extends State<SignupScreen> {
       _submitted = false;
     });
     final digits = _birthDate.text;
-    final account = widget.auth.register(
-      id: _id.text,
-      password: _password.text,
-      name: _name.text,
-      birthDate: DateTime(
-        int.parse(digits.substring(0, 4)),
-        int.parse(digits.substring(4, 6)),
-        int.parse(digits.substring(6, 8)),
-      ),
-      email: _email.text,
-      phoneNumber: _phone.text,
-    );
-    FocusManager.instance.primaryFocus?.unfocus();
-    Navigator.of(context).pop(account);
+    try {
+      final account = await widget.auth.registerRemote(
+        id: _id.text,
+        password: _password.text,
+        name: _name.text,
+        birthDate: DateTime(
+          int.parse(digits.substring(0, 4)),
+          int.parse(digits.substring(4, 6)),
+          int.parse(digits.substring(6, 8)),
+        ),
+        email: _email.text,
+        phoneNumber: _phone.text,
+      );
+      if (!mounted) return;
+      FocusManager.instance.primaryFocus?.unfocus();
+      Navigator.of(context).pop(account);
+    } on StateError catch (e) {
+      if (mounted) {
+        setState(() {
+          _completing = false;
+          _idError = e.message;
+        });
+      }
+    }
   }
 
   Widget _status(String text) => Semantics(

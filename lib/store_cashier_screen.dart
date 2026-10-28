@@ -34,13 +34,14 @@ class _StoreCashierScreenState extends State<StoreCashierScreen> {
     super.dispose();
   }
 
-  void _find() {
+  Future<void> _find() async {
     try {
-      final request = widget.auth.usage.findForStore(
+      final request = await widget.auth.usage.findForStoreRemote(
         code: _code.text,
         storeId: widget.storeId,
         ownerId: widget.account.id,
       );
+      if (!mounted) return;
       setState(() {
         _request = request;
         _error = null;
@@ -48,6 +49,7 @@ class _StoreCashierScreenState extends State<StoreCashierScreen> {
       });
       FocusManager.instance.primaryFocus?.unfocus();
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() {
         _request = null;
         _error = error.message;
@@ -55,22 +57,24 @@ class _StoreCashierScreenState extends State<StoreCashierScreen> {
     }
   }
 
-  void _requestAmount() {
+  Future<void> _requestAmount() async {
     final amount = parseDonationAmount(_amount.text);
     if (amount == null) {
       setState(() => _error = '1원 이상의 사용 금액을 입력해 주세요.');
       return;
     }
     try {
-      widget.auth.usage.requestAmount(
+      await widget.auth.usage.requestAmountRemote(
         requestId: _request!.id,
         storeId: widget.storeId,
         ownerId: widget.account.id,
         amount: amount,
       );
+      if (!mounted) return;
       setState(() => _error = null);
       FocusManager.instance.primaryFocus?.unfocus();
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() => _error = error.message);
     }
   }

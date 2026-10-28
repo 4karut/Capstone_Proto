@@ -58,14 +58,14 @@ class _StoreApplicationScreenState extends State<StoreApplicationScreen> {
     super.dispose();
   }
 
-  void _apply() {
+  Future<void> _apply() async {
     if (_working) return;
     setState(() => _submitted = true);
     if (!_form.currentState!.validate()) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _working = true);
     try {
-      final app = widget.auth.stores.apply(
+      final app = await widget.auth.stores.applyRemote(
         ownerId: widget.account.id,
         ownerName: widget.account.name,
         name: _name.text,
@@ -76,8 +76,10 @@ class _StoreApplicationScreenState extends State<StoreApplicationScreen> {
         description: _description.text,
         resubmissionOf: widget.resubmissionOf,
       );
+      if (!mounted) return;
       setState(() => _complete = app);
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() => _working = false);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error.message)));

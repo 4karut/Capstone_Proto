@@ -86,14 +86,14 @@ class _DonationFormScreenState extends State<DonationFormScreen> {
     }
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
     if (_submitting) return;
     setState(() => _submitted = true);
     if (!_form.currentState!.validate()) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _submitting = true);
     try {
-      final donation = widget.auth.donations.complete(
+      final donation = await widget.auth.donations.completeRemote(
         checkoutId: _checkoutId,
         type: widget.type,
         groupId: widget.group.id,
@@ -103,6 +103,7 @@ class _DonationFormScreenState extends State<DonationFormScreen> {
         storeId: _prepaid ? _store!.id : null,
         expiresOn: _prepaid ? parseDonationDeadline(_deadline.text) : null,
       );
+      if (!mounted) return;
       Navigator.of(context).pushReplacement<void, void>(
         MaterialPageRoute(
           builder: (_) =>
@@ -110,6 +111,7 @@ class _DonationFormScreenState extends State<DonationFormScreen> {
         ),
       );
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() => _submitting = false);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error.message)));

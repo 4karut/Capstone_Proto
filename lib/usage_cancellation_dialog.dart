@@ -32,20 +32,22 @@ class _UsageCancellationDialogState extends State<UsageCancellationDialog> {
     super.dispose();
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
     if (_working) return;
     setState(() => _submitted = true);
     if (!_form.currentState!.validate()) return;
     setState(() => _working = true);
     try {
-      final result = widget.auth.usage.reversePayment(
+      final result = await widget.auth.usage.reversePaymentRemote(
         receiptId: widget.receipt.id,
         storeId: widget.receipt.storeId,
         ownerId: widget.account.id,
         reason: _reason.text,
       );
+      if (!mounted) return;
       Navigator.of(context).pop(result);
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() {
         _working = false;
         _error = error.message;

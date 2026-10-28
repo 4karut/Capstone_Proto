@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'server_gateway.dart';
+
 import 'dart:math';
 
 import 'package:characters/characters.dart';
@@ -129,6 +133,7 @@ class PrepaidUsageReceipt {
 
 /// Local prototype ledger. Creating a QR or requesting an amount never consumes funds.
 class DemoPrepaidUsageStore extends ChangeNotifier {
+  ServerGateway? gateway;
   DemoPrepaidUsageStore({
     required this.groups,
     required this.stores,
@@ -426,4 +431,187 @@ class DemoPrepaidUsageStore extends ChangeNotifier {
       .toList()
       .reversed
       .toList();
+
+  void importSnapshot(Map<String, dynamic> s) {
+    final old = {for (final r in _requests) r.id: r};
+    _requests.clear();
+    for (final r in s['requests']) {
+      _requests.add(
+        (old[r['id']] ??
+              PrepaidUsageRequest(
+                id: r['id'],
+                code: r['code'],
+                offerId: r['offerId'],
+                storeId: r['storeId'],
+                groupId: r['groupId'],
+                userId: r['userId'],
+                userName: r['userName'],
+                createdAt: DateTime.parse(r['createdAt']).toLocal(),
+                expiresAt: DateTime.parse(r['expiresAt']).toLocal(),
+              ))
+          .._status = UsageRequestStatus.values.byName(r['status'])
+          .._amount = r['amount']
+          .._cashierId = r['cashierId']
+          .._receiptId = r['receiptId'],
+      );
+    }
+    final previous = {for (final r in _receipts) r.id: r};
+    _receipts.clear();
+    for (final r in s['receipts']) {
+      final receipt =
+          previous[r['id']] ??
+          PrepaidUsageReceipt(
+            id: r['id'],
+            requestId: r['requestId'],
+            offerId: r['offerId'],
+            groupId: r['groupId'],
+            storeId: r['storeId'],
+            donorId: r['donorId'],
+            userId: r['userId'],
+            userName: r['userName'],
+            amount: r['amount'],
+            remainingAmount: r['remainingAmount'],
+            createdAt: DateTime.parse(r['createdAt']).toLocal(),
+          );
+      final t = r['thanks'], c = r['cancellation'];
+      receipt._thanks = t == null
+          ? null
+          : ThanksMessage(
+              text: t['text'],
+              createdAt: DateTime.parse(t['createdAt']).toLocal(),
+              photo: t['photo'] == null
+                  ? null
+                  : UsagePhoto(
+                      name: t['photo']['name'],
+                      bytes: base64Decode(t['photo']['base64']),
+                    ),
+            );
+      receipt._cancellation = c == null
+          ? null
+          : UsageCancellation(
+              ownerId: c['ownerId'],
+              reason: c['reason'],
+              createdAt: DateTime.parse(c['createdAt']).toLocal(),
+              remainingAmount: c['remainingAmount'],
+              expiresOn: DateTime.parse(c['expiresOn']),
+            );
+      _receipts.add(receipt);
+    }
+    notifyListeners();
+  }
+
+  Future<PrepaidUsageRequest> beginRemote({
+    required String offerId,
+    required String userId,
+    required String userName,
+  }) async {
+    if (gateway == null) {
+      return begin(offerId: offerId, userId: userId, userName: userName);
+    }
+    final r = await gateway!.command('usage.begin', {'offerId': offerId});
+    return _requests.firstWhere((q) => q.id == r['id']);
+  }
+
+  Future<PrepaidUsageRequest> findForStoreRemote({
+    required String code,
+    required String storeId,
+    required String ownerId,
+  }) async {
+    if (gateway == null) {
+      return findForStore(code: code, storeId: storeId, ownerId: ownerId);
+    }
+    final r = await gateway!.command('usage.find', {
+      'code': code,
+      'storeId': storeId,
+    });
+    return _requests.firstWhere((q) => q.id == r['id']);
+  }
+
+  Future<void> requestAmountRemote({
+    required String requestId,
+    required String storeId,
+    required String ownerId,
+    required int amount,
+  }) async {
+    if (gateway == null) {
+      requestAmount(
+        requestId: requestId,
+        storeId: storeId,
+        ownerId: ownerId,
+        amount: amount,
+      );
+      return;
+    }
+    await gateway!.command('usage.amount', {
+      'requestId': requestId,
+      'storeId': storeId,
+      'amount': amount,
+    });
+  }
+
+  Future<PrepaidUsageReceipt> approveRemote({
+    required String requestId,
+    required String userId,
+  }) async {
+    if (gateway == null) return approve(requestId: requestId, userId: userId);
+    final r = await gateway!.command('usage.approve', {'requestId': requestId});
+    return _receipts.firstWhere((q) => q.id == r['id']);
+  }
+
+  Future<void> cancelRemote({
+    required String requestId,
+    required String userId,
+  }) async {
+    if (gateway == null) {
+      cancel(requestId: requestId, userId: userId);
+      return;
+    }
+    await gateway!.command('usage.cancel', {'requestId': requestId});
+  }
+
+  Future<UsageCancellation> reversePaymentRemote({
+    required String receiptId,
+    required String storeId,
+    required String ownerId,
+    String reason = '',
+  }) async {
+    if (gateway == null) {
+      return reversePayment(
+        receiptId: receiptId,
+        storeId: storeId,
+        ownerId: ownerId,
+        reason: reason,
+      );
+    }
+    await gateway!.command('usage.reverse', {
+      'receiptId': receiptId,
+      'storeId': storeId,
+      'reason': reason,
+    });
+    return _receipts.firstWhere((r) => r.id == receiptId).cancellation!;
+  }
+
+  Future<void> sendThanksRemote({
+    required String receiptId,
+    required String userId,
+    required String message,
+    UsagePhoto? photo,
+  }) async {
+    if (gateway == null) {
+      sendThanks(
+        receiptId: receiptId,
+        userId: userId,
+        message: message,
+        photo: photo,
+      );
+      return;
+    }
+    await gateway!.command('usage.thanks', {
+      'receiptId': receiptId,
+      'message': message,
+      'photo': photo == null
+          ? null
+          : {'name': photo.name, 'base64': base64Encode(photo.bytes)},
+    });
+  }
 }

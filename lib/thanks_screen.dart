@@ -67,21 +67,23 @@ class _ThanksComposeScreenState extends State<ThanksComposeScreen> {
     }
   }
 
-  void _send() {
+  Future<void> _send() async {
     if (_sending || _picking) return;
     setState(() {
       _sending = true;
       _error = null;
     });
     try {
-      widget.auth.usage.sendThanks(
+      await widget.auth.usage.sendThanksRemote(
         receiptId: widget.receiptId,
         userId: widget.account.id,
         message: _message.text,
         photo: _photo,
       );
+      if (!mounted) return;
       FocusManager.instance.primaryFocus?.unfocus();
     } on StateError catch (error) {
+      if (!mounted) return;
       setState(() {
         _sending = false;
         _error = error.message;

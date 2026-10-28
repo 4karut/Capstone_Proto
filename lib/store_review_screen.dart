@@ -136,13 +136,18 @@ class _ApplicationReview extends StatelessWidget {
   final DemoAccount account;
   final StoreApplication application;
 
-  void _approve(BuildContext context) {
+  Future<void> _approve(BuildContext context) async {
     try {
-      auth.stores.approve(applicationId: application.id, adminId: account.id);
+      await auth.stores.approveRemote(
+        applicationId: application.id,
+        adminId: account.id,
+      );
+      if (!context.mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('${application.name}가 승인됐어요.')));
     } on StateError catch (error) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error.message)));
     }
@@ -155,15 +160,17 @@ class _ApplicationReview extends StatelessWidget {
     );
     if (reason == null || !context.mounted) return;
     try {
-      auth.stores.reject(
+      await auth.stores.rejectRemote(
         applicationId: application.id,
         adminId: account.id,
         reason: reason,
       );
+      if (!context.mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('반려 사유가 신청자에게 전달됐어요.')));
     } on StateError catch (error) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error.message)));
     }

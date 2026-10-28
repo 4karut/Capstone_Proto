@@ -1,3 +1,5 @@
+import 'server_widgets.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -171,10 +173,13 @@ class StoreManagementScreen extends StatelessWidget {
       ),
     );
     if (picked == null || !context.mounted) return;
-    auth.stores.updateThumbnail(
-      storeId: storeId,
-      ownerId: account.id,
-      thumbnail: picked,
+    await remoteUiAction(
+      context,
+      () => auth.stores.updateThumbnailRemote(
+        storeId: storeId,
+        ownerId: account.id,
+        thumbnail: picked,
+      ),
     );
   }
 
@@ -198,11 +203,15 @@ class StoreManagementScreen extends StatelessWidget {
         ],
       ),
     );
+    if (!context.mounted) return;
     if (remove == true) {
-      auth.stores.removeMenu(
-        storeId: storeId,
-        ownerId: account.id,
-        index: index,
+      await remoteUiAction(
+        context,
+        () => auth.stores.removeMenuRemote(
+          storeId: storeId,
+          ownerId: account.id,
+          index: index,
+        ),
       );
     }
   }
@@ -502,11 +511,11 @@ class _StoreMenuEditScreenState extends State<StoreMenuEditScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     setState(() => _submitted = true);
     if (!_form.currentState!.validate()) return;
     try {
-      widget.auth.stores.saveMenu(
+      await widget.auth.stores.saveMenuRemote(
         storeId: widget.storeId,
         ownerId: widget.account.id,
         index: widget.index,
@@ -517,8 +526,10 @@ class _StoreMenuEditScreenState extends State<StoreMenuEditScreen> {
           recommended: _recommended,
         ),
       );
+      if (!mounted) return;
       Navigator.of(context).pop();
     } on StateError catch (error) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error.message)));
     }
