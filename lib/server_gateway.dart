@@ -159,9 +159,33 @@ class ServerGateway extends ChangeNotifier {
     Map<String, dynamic> data, {
     String? id,
   }) => _working(() async {
-    final response = await _call('POST', '/commands', {
+    const routes = <String, String>{
+      'group.join': '/groups/join',
+      'group.invite': '/groups/invite',
+      'group.approve': '/groups/approve',
+      'group.favorite': '/groups/favorite',
+      'store.favorite': '/stores/favorite',
+      'store.apply': '/stores/apply',
+      'store.approve': '/stores/approve',
+      'store.reject': '/stores/reject',
+      'store.thumbnail': '/stores/thumbnail',
+      'store.menu.save': '/stores/menus/save',
+      'store.menu.remove': '/stores/menus/remove',
+      'donation.complete': '/donations/complete',
+      'usage.begin': '/usages/begin',
+      'usage.find': '/usages/find',
+      'usage.amount': '/usages/amount',
+      'usage.approve': '/usages/approve',
+      'usage.cancel': '/usages/cancel',
+      'usage.reverse': '/usages/reverse',
+      'usage.thanks': '/usages/thanks',
+    };
+    final path = routes[action];
+    if (path == null) {
+      throw ArgumentError.value(action, 'action', 'Unknown command');
+    }
+    final response = await _call('POST', path, {
       'commandId': id ?? commandId(),
-      'action': action,
       'data': data,
     });
     _publish(response['snapshot']);
