@@ -27,10 +27,16 @@ class ServerGateway extends ChangeNotifier {
       ? DateTime.now()
       : _serverTime!.add(DateTime.now().difference(_receivedAt!));
   static String commandId() {
-    final r = Random.secure();
+    final random = Random.secure();
+    // Web bitwise shifts use 32-bit integers, so 1 << 32 becomes zero.
+    // Generate all 128 random bits a byte at a time on every platform.
+    final hex = List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
     return List.generate(
       4,
-      (_) => r.nextInt(1 << 32).toRadixString(16).padLeft(8, '0'),
+      (index) => hex.substring(index * 8, index * 8 + 8),
     ).join('-');
   }
 
